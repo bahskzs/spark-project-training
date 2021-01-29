@@ -1,17 +1,17 @@
 package com.yqy.hbase;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hbase.HColumnDescriptor;
-import org.apache.hadoop.hbase.HTableDescriptor;
-import org.apache.hadoop.hbase.TableName;
+import org.apache.hadoop.hbase.*;
 import org.apache.hadoop.hbase.client.*;
 import org.apache.hadoop.hbase.util.Bytes;
+import org.apache.parquet.column.ColumnDescriptor;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 
@@ -23,17 +23,17 @@ import java.util.List;
 public class HBaseApp {
 
     Connection connection = null;
-    Table tb = null;
+    Table table = null;
     Admin admin = null;
 
-    String tableName  = "students_1";
+    String tableName  = "stu";
 
     @Before
     public void setUp() {
         Configuration configuration = new Configuration();
 
-        configuration.set("hbase.rootdir","hdfs://bigdata244:8020/hbase");
-        configuration.set("hbase.zookeeper.quorum","bigdata244:2181");
+        configuration.set("hbase.rootdir","hdfs://218.85.80.113:15524/hbase");
+        //configuration.set("hbase.zookeeper.quorum","192.168.10.18:2181");
 
         try {
             connection = ConnectionFactory.createConnection(configuration);
@@ -99,6 +99,26 @@ public class HBaseApp {
         }
     }
 
+
+
+    @Test
+    public void testAddColumnFamily() throws IOException {
+        //添加新的列族元素
+
+        ColumnFamilyDescriptorBuilder cdb = ColumnFamilyDescriptorBuilder.newBuilder(Bytes.toBytes("Kates"));
+        ColumnFamilyDescriptor columnFamilyDescriptor = cdb.build();
+        //禁用表
+        admin.disableTable(TableName.valueOf(tableName));
+        //添加列族元素
+        admin.addColumnFamily(TableName.valueOf(tableName), columnFamilyDescriptor);
+        //启用表
+        admin.enableTableAsync(TableName.valueOf(tableName));
+
+        TableDescriptor tableDescriptor = admin.getDescriptor(TableName.valueOf(tableName));
+
+        Assert.assertEquals(4, tableDescriptor.getColumnFamilyCount());
+    }
+
      /**
       * @author: bahsk
       * @date: 2021/1/28 21:35
@@ -108,16 +128,68 @@ public class HBaseApp {
       */
     @Test
     public void testPut() throws IOException {
-        tb =  connection.getTable(TableName.valueOf(tableName));
 
-        Put put = new Put(Bytes.toBytes("learn"));
-        put.addColumn(Bytes.toBytes("info"), Bytes.toBytes("name"), Bytes.toBytes("yqy"));
-        tb.put(put);
-        TableDescriptor tableDescriptor = admin.getDescriptor(TableName.valueOf(tableName));
-        System.out.println(tableDescriptor.getValue("name"));
+        table =  connection.getTable(TableName.valueOf(tableName));
 
+//        Put put = new Put(Bytes.toBytes("learn"));
+//        put.addColumn(Bytes.toBytes("info"), Bytes.toBytes("name"), Bytes.toBytes("yqy"));
+//        put.addColumn(Bytes.toBytes("info"), Bytes.toBytes("age"), Bytes.toBytes("1"));
+//        //为新的列族追加
+//        put.addColumn(Bytes.toBytes("others"), Bytes.toBytes("type"), Bytes.toBytes("cat"));
+        //table.put(put);
+
+
+        //追加多条
+        List<Put> puts = new ArrayList<Put>();
+        Put put1 = new Put(Bytes.toBytes("learn001"));
+        put1.addColumn(Bytes.toBytes("info"), Bytes.toBytes("name"), Bytes.toBytes("yqy"));
+        put1.addColumn(Bytes.toBytes("info"), Bytes.toBytes("age"), Bytes.toBytes("1"));
+        //为新的列族追加
+        put1.addColumn(Bytes.toBytes("others"), Bytes.toBytes("type"), Bytes.toBytes("cat"));
+
+//        ResultScanner resultScanner = table.getScanner(Bytes.toBytes("info"), Bytes.toBytes("name"));
+//        Assert.assertNotNull(resultScanner);
+        Put put2 = new Put(Bytes.toBytes("learn002"));
+        put2.addColumn(Bytes.toBytes("info"), Bytes.toBytes("name"), Bytes.toBytes("yqy"));
+        put2.addColumn(Bytes.toBytes("info"), Bytes.toBytes("age"), Bytes.toBytes("1"));
+        //为新的列族追加
+        put2.addColumn(Bytes.toBytes("others"), Bytes.toBytes("type"), Bytes.toBytes("cat"));
+
+        puts.add(put1);
+        puts.add(put2);
+
+        table.put(puts);
     }
 
+
+    @Test
+    public void testGet() throws IOException {
+        table =  connection.getTable(TableName.valueOf(tableName));
+        Get get = new Get(Bytes.toBytes("learn001"));
+        Result result = table.get(get);
+        get.addColumn(Bytes.toBytes("info"), Bytes.toBytes("age"));
+//        List<Cell> cells = result.getColumnCells(Bytes.toBytes("info"), Bytes.toBytes("name"));
+//        for(Cell cell : cells){
+//            System.out.println(cell.);
+//        }
+        printResult(result);
+    }
+
+    private void printResult(Result result) {
+       for(Cell cell : result.rawCells()) {
+           /**
+            * getRow()
+            * Method for retrieving the row key that corresponds to
+            * the row from which this Result was created.
+            * @return row
+            */
+           System.out.println(Bytes.toString(result.getRow()) + "\t"
+                   + Bytes.toString(CellUtil.cloneFamily(cell)) + "\t"
+                   +  Bytes.toString(CellUtil.cloneQualifier(cell)) + "\t"
+                   + Bytes.toString(CellUtil.cloneValue(cell)) + "\t"
+                   + cell.getTimestamp());
+       }
+    }
 
 
     @After
